@@ -230,7 +230,7 @@ class Play:
 
     def build_trajectory_dataset(self, epsilon=None):
         _, data = self.evaluate(epsilon=epsilon)
-        with h5py.File("/home/sara/repositories/RL-skill-extraction/data/coinrun_easy_500_" + str(
+        with h5py.File("../data/coinrun_easy_500_" + str(
                 self.max_steps) + "_epsilon_greedey.hdf5", 'w') as dataset:
             for k in tqdm(data, desc="save datafile"):
                 dataset.create_dataset(k, data=data[k], compression='gzip')

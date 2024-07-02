@@ -62,7 +62,6 @@ class Agent(nn.Module):
 
     def load_weights(self, env_name, checkpoint_name=None):
         if checkpoint_name is None:
-            # path = "/home/sara/repositories/RL-skill-extraction/models/self_contained_skill_ppo_models/antmaze-medium-diverse-v0/antmaze-medium-diverse-v0_seed_2_kl_True_initialized_TrueadaptiveTrue_weights.pth"
             path = "/models/self_contained_skill_ppo_models/antmaze-medium-diverse-v0/antmaze-medium-diverse-v0_seed_2_weights.pth"
         else:
             path = "/models/self_contained_skill_ppo_models/" + env_name + "/" + checkpoint_name

@@ -23,7 +23,7 @@ def train():
     exp_id = str(uuid.uuid4())
     print("the experiment id is:", exp_id)
 
-    summary_writer = SummaryWriter(log_dir="gs://king-ai-contentproduction-dev-training/RL-skill-extraction/AE_models/" + config["env_name"] + "/" + str(exp_id) + "/logs")
+    summary_writer = SummaryWriter(log_dir="LOG_DIR")
     is_cuda = torch.cuda.is_available()
     env = make_env(costume_map=True)
 
