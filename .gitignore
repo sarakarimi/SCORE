@@ -1,0 +1,16 @@
+models/RL_models/
+models/RL_state_encoder_models/
+models/RL_state_encoder_with_state_models/
+models/RL_state_encoder_with_state_models/logs/
+models/AE_models/
+models/AE_models/logs/
+/models
+/RL/runs/
+/RL/wandb/
+/RL_opal/runs/
+/RL_opal/wandb/
+/RL_state_encoder/runs/
+/RL_state_encoder/wandb/
+__pycache__/
+.idea
+data
