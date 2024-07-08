@@ -91,7 +91,7 @@ def parse_args():
     parser.add_argument("--evaluate", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
                         help="Set to evaluation mode")
     parser.add_argument("--model-path", type=str,
-                        default="../models/self_contained_skill_ppo_procgen_models/coinrun/coinrun_easy_seed_1_weights.pth",
+                        default="../models/self_contained_skill_ppo_procgen_models/coinrun/coinrun_hard_seed_5_kl_False_initialized_TrueadaptiveTrue_weights.pth",
                         help="path to the saved model")
     parser.add_argument("--skill-model-path", type=str,
                         default="../models/AE_models/procgen-opal/600.pt",
@@ -219,20 +219,21 @@ class Agent(nn.Module):
     def load_weights(self, path):
         checkpoint = torch.load(path, map_location=torch.device('cuda'))
         self.actor.load_state_dict(checkpoint["actor_state_dict"])
-        self.network = checkpoint["network_state_dict"]
+        # print(checkpoint["actor_state_dict"])
+        self.network.load_state_dict(checkpoint["network_state_dict"])
         self.critic.load_state_dict(checkpoint["critic_state_dict"])
         # optim.load_state_dict(checkpoint["optimizer_state_dict"])
 
 
 class Play:
-    def __init__(self, env, path, agent, max_steps=1000000):
+    def __init__(self, env, path, agent, max_steps=100000):
         self.env = env
         self.max_steps = max_steps
         self.agent = agent
         self.agent.load_weights(path)
         self.device = "cuda"
 
-    def evaluate(self, epsilon=None):
+    def evaluate(self, epsilon=None, prior=None):
         eps_return, states, actions = [], [], []
         data = {'observations': [], 'actions': []}
         i = 0
@@ -242,18 +243,19 @@ class Play:
             done = False
             while not done:
                 i += 1
-                action, _, _, _, _ = self.agent.get_action_and_value(torch.FloatTensor(s).unsqueeze(0).to(self.device))
+                s = torch.FloatTensor(s).to(self.device)
+                action, _, _, _, _, _ = self.agent.get_action_and_value(s, skill_prior=prior)
                 action = action.cpu().numpy()
                 if epsilon:
                     action = [random.randint(0, 14)] if random.random() < epsilon else action
-                data['observations'].append(s[0])
-                data['actions'].append(action[0])
-                s_, r, done, info = self.env.step(action[0])
+                # data['observations'].append(s[0])
+                # data['actions'].append(action[0])
+                s_, r, done, info = self.env.step(action)
                 episode_reward += r
                 s = s_
-                if "episode" in info.keys():
-                    eps_return.append(info['episode']['r'])
-                    print(i, info['episode']['r'])
+                if "episode" in info[0].keys():
+                    eps_return.append(info[0]['episode']['r'])
+                    print(i, info[0]['episode']['r'])
         print("Avg episodic return:", np.asarray(eps_return).mean(), i)
         return eps_return, data
 
@@ -305,18 +307,20 @@ def main(seed):
     agent = Agent(envs).to(device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
+    # Path to the trained skill VAE model to copy weights from the decoder to PPO policy net
+    path = args.skill_model_path
+    AE_model = get_trained_ae_model(state_dim=envs.observation_space['rgb'].shape,
+                                    action_dim=envs.action_space.shape, path=path, env_name='procgen').to('cuda')
+    prior = AE_model.prior
+
     if args.evaluate:  # evaluation loop
-        envs = gym.make("procgen-coinrun-v0", distribution_mode=args.ditribution_mode)  # , render_mode="human")
+        # envs = gym.make("procgen-coinrun-v0", distribution_mode=args.ditribution_mode, num_levels=args.num_levels,
+        #                 start_level=args.start_level, )  # , render_mode="human")
         player = Play(envs, args.model_path, agent)
-        player.evaluate()
+        player.evaluate(prior=prior)
         envs.close()
         writer.close()
     else:
-        # Path to the trained skill VAW model to copy weights from the decoder to PPO policy net
-        path = args.skill_model_path
-        AE_model = get_trained_ae_model(state_dim=envs.observation_space['rgb'].shape,
-                                        action_dim=envs.action_space.shape, path=path, env_name='procgen').to('cuda')
-        prior = AE_model.prior
 
         if args.copy_weight:
             agent.initialize_weights(AE_model.decoder)
@@ -417,7 +421,8 @@ def main(seed):
                     mb_inds = b_inds[start:end]
 
                     _, _, newlogprob, entropy, newvalue, dist = agent.get_action_and_value(b_obs[mb_inds],
-                                                                                           action=b_actions.long()[mb_inds],
+                                                                                           action=b_actions.long()[
+                                                                                               mb_inds],
                                                                                            skill=b_skills[mb_inds])
                     logratio = newlogprob - b_logprobs[mb_inds]
                     ratio = logratio.exp()
@@ -459,11 +464,12 @@ def main(seed):
                         uncertainty_weight = 1
                         if args.adaptive_kl_weight:
                             uncertainty_weight = decoder_dist.log_prob(b_actions[mb_inds])
-                            uncertainty_weight = torch.exp(uncertainty_weight).sum()
-                        kl_divergence = torch.distributions.kl_divergence(dist, decoder_dist).sum()
-                        kl_loss = torch.clamp(kl_divergence, -100, 100)
+                            uncertainty_weight = torch.exp(uncertainty_weight)  # .sum()
+                        kl_divergence = torch.distributions.kl_divergence(dist, decoder_dist)  # .sum()
+                        kl_divergence = torch.clamp(kl_divergence, -100, 100)
+                        kl_loss = kl_divergence * uncertainty_weight
 
-                        p_loss = pg_loss - uncertainty_weight * 0.001 * kl_loss
+                        p_loss = pg_loss - 0.00001 * kl_loss.sum()
                     else:
                         p_loss = pg_loss
 
@@ -488,8 +494,8 @@ def main(seed):
             writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
             writer.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
             writer.add_scalar("losses/p_loss", p_loss.item(), global_step)
-            writer.add_scalar("losses/kl_loss", kl_loss.item(), global_step)
-            writer.add_scalar("losses/weights", uncertainty_weight.item(), global_step)
+            writer.add_scalar("losses/kl_loss", kl_divergence.sum().item(), global_step)
+            writer.add_scalar("losses/uncertainty_weights", uncertainty_weight.sum().item(), global_step)
 
             writer.add_scalar("losses/entropy", entropy_loss.item(), global_step)
             writer.add_scalar("losses/old_approx_kl", old_approx_kl.item(), global_step)
@@ -514,5 +520,5 @@ def main(seed):
 
 
 if __name__ == "__main__":
-    for seed in [1]:
+    for seed in [1, 2, 3, 4, 5]:
         main(seed)

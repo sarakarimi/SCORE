@@ -40,7 +40,7 @@ class Args:
     """whether to capture videos of the agent performances (check out `videos` folder)"""
 
     # Algorithm specific arguments
-    env_id: str = "maze2d-medium-v1"  #"AntMaze_Large_Diverse_GDense"
+    env_id: str = "maze2d-medium-v1"  # "AntMaze_Large_Diverse_GDense"
     """the environment id of the task"""
     total_timesteps: int = 3500000
     """total timesteps of the experiments"""
@@ -66,6 +66,10 @@ class Args:
     """Entropy regularization coefficient."""
     autotune: bool = True
     """automatic tuning of the entropy coefficient"""
+
+
+LOG_STD_MAX = 2
+LOG_STD_MIN = -5
 
 
 def make_env(env_id, seed, idx, capture_video, run_name):
@@ -109,7 +113,8 @@ class SoftQNetwork(nn.Module):
         return x
 
     def save_weights(self, env_name, env, optim, seed, name=None):
-        path = "../models/self_contained_sac_models/" + env_name + "/" + env_name + "_seed_" + str(seed) + "_" + name + "_QNet_weights.pth"
+        path = "../models/self_contained_sac_models/" + env_name + "/" + env_name + "_seed_" + str(
+            seed) + "_" + name + "_QNet_weights.pth"
         torch.save({"fc1_state_dict": self.fc1.state_dict(),
                     "fc2_state_dict": self.fc2.state_dict(),
                     "fc3_state_dict": self.fc3.state_dict(),
@@ -117,10 +122,6 @@ class SoftQNetwork(nn.Module):
                     "state_rms_mean": env.obs_rms.mean,
                     "state_rms_var": env.obs_rms.var,
                     }, path)
-
-
-LOG_STD_MAX = 2
-LOG_STD_MIN = -5
 
 
 class Actor(nn.Module):
@@ -163,7 +164,8 @@ class Actor(nn.Module):
         return action, log_prob, mean
 
     def save_weights(self, env_name, env, optim, seed):
-        path = "../models/self_contained_sac_models/" + env_name + "/" + env_name + "_seed_" + str(seed) + "actor_weights.pth"
+        path = "../models/self_contained_sac_models/" + env_name + "/" + env_name + "_seed_" + str(
+            seed) + "actor_weights.pth"
         torch.save({"fc_mean_state_dict": self.fc_mean.state_dict(),
                     "fc_log_std_state_dict": self.fc_logstd.state_dict(),
                     "fc1_state_dict": self.fc1.state_dict(),
@@ -180,8 +182,8 @@ def main(seed):
     if sb3.__version__ < "2.0":
         raise ValueError(
             """Ongoing migration: run the following command to install the new dependencies:
-poetry run pip install "stable_baselines3==2.0.0a1"
-"""
+            pip install "stable_baselines3==2.0.0a1"
+            """
         )
 
     args = tyro.cli(Args)
@@ -354,20 +356,26 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 if global_step % 100000 == 0:
                     print("saving checkpoint at ", global_step)
                     actor.save_weights(env_name=args.env_id, env=envs.envs[0], optim=a_optimizer, seed=args.seed)
-                    qf1.save_weights(env_name=args.env_id, env=envs.envs[0], optim=q_optimizer, seed=args.seed, name="qf1")
-                    qf2.save_weights(env_name=args.env_id, env=envs.envs[0], optim=q_optimizer, seed=args.seed, name="qf2")
-                    qf1_target.save_weights(env_name=args.env_id, env=envs.envs[0], optim=q_optimizer, seed=args.seed, name="qf1_target")
-                    qf2_target.save_weights(env_name=args.env_id, env=envs.envs[0], optim=q_optimizer, seed=args.seed, name="qf2_target")
+                    qf1.save_weights(env_name=args.env_id, env=envs.envs[0], optim=q_optimizer, seed=args.seed,
+                                     name="qf1")
+                    qf2.save_weights(env_name=args.env_id, env=envs.envs[0], optim=q_optimizer, seed=args.seed,
+                                     name="qf2")
+                    qf1_target.save_weights(env_name=args.env_id, env=envs.envs[0], optim=q_optimizer, seed=args.seed,
+                                            name="qf1_target")
+                    qf2_target.save_weights(env_name=args.env_id, env=envs.envs[0], optim=q_optimizer, seed=args.seed,
+                                            name="qf2_target")
 
     qf1.save_weights(env_name=args.env_id, env=envs.envs[0], optim=q_optimizer, seed=args.seed, name="qf1")
     qf2.save_weights(env_name=args.env_id, env=envs.envs[0], optim=q_optimizer, seed=args.seed, name="qf2")
-    qf1_target.save_weights(env_name=args.env_id, env=envs.envs[0], optim=q_optimizer, seed=args.seed, name="qf1_target")
-    qf2_target.save_weights(env_name=args.env_id, env=envs.envs[0], optim=q_optimizer, seed=args.seed, name="qf2_target")
+    qf1_target.save_weights(env_name=args.env_id, env=envs.envs[0], optim=q_optimizer, seed=args.seed,
+                            name="qf1_target")
+    qf2_target.save_weights(env_name=args.env_id, env=envs.envs[0], optim=q_optimizer, seed=args.seed,
+                            name="qf2_target")
     actor.save_weights(env_name=args.env_id, env=envs.envs[0], optim=a_optimizer, seed=args.seed)
     envs.close()
     writer.close()
 
 
 if __name__ == "__main__":
-    for seed in [2, 3, 4, 5]:
+    for seed in [1, 2, 3, 4, 5]:
         main(seed)

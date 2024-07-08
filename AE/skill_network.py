@@ -294,7 +294,7 @@ class ARPolicyNetwork(nn.Module):
 # goal idxs will be removed
 class LMP(nn.Module):
     def __init__(self, latent_dim, state_dim, action_dim, hidden_dims, tanh=False, latent_reg=0.0, ar=False,
-                 ar_params=None, rnn_layers=4, goal_idxs=None, act_fn=nn.ReLU(), spirl=False):
+                 ar_params=None, rnn_layers=4, goal_idxs=None, act_fn=nn.ReLU()):
         super(LMP, self).__init__()
         self.latent_dim = latent_dim
         self.action_dim = action_dim
@@ -305,13 +305,8 @@ class LMP(nn.Module):
         self.latent_reg = latent_reg
         self.act_fn = act_fn
         self.ar = ar
-        self.spirl = spirl
         self.create_encoder()
-        if self.spirl:
-            self.decoder = PolicyNetwork(latent_dim=latent_dim, state_dim=0, hidden_dims=hidden_dims,
-                                         act_dim=action_dim, act_fn=act_fn)
-        else:
-            self.decoder = PolicyNetwork(latent_dim=latent_dim, state_dim=self.state_dim, hidden_dims=hidden_dims,
+        self.decoder = PolicyNetwork(latent_dim=latent_dim, state_dim=self.state_dim, hidden_dims=hidden_dims,
                                          act_dim=action_dim, act_fn=act_fn)
         self.prior = PolicyNetwork(latent_dim=0, state_dim=self.state_dim, hidden_dims=hidden_dims, act_dim=latent_dim,
                                    act_fn=act_fn)
@@ -319,10 +314,7 @@ class LMP(nn.Module):
     def create_encoder(self):
         self.state_encoder = FCNetwork(inp_dim=self.state_dim, hidden_dims=self.hidden_dims,
                                        out_dim=self.hidden_dims[-1], act_fn=self.act_fn)
-        if self.spirl:
-            input_dim = self.action_dim
-        else:
-            input_dim = self.hidden_dims[-1] + self.action_dim
+        input_dim = self.hidden_dims[-1] + self.action_dim
         self.birnn_encoder = nn.GRU(input_dim, self.hidden_dims[-1], self.rnn_layers, batch_first=True,
                                     bidirectional=True)
 
@@ -349,10 +341,7 @@ class LMP(nn.Module):
         # Assumes all traj is of equal length
         batch_size, seq_len = action_traj.size(0), action_traj.size(1)
         nll_loss, kl_loss = 0., 0.
-        if self.spirl:
-            encoder_mean, encoder_std = self.forward_encoder(action_traj=action_traj, state_traj=None)
-        else:
-            encoder_mean, encoder_std = self.forward_encoder(action_traj=action_traj, state_traj=state_traj)
+        encoder_mean, encoder_std = self.forward_encoder(action_traj=action_traj, state_traj=state_traj)
         prior_mean, prior_std = self.prior(latent=None, state=state_traj[:, 0, :])
         encoder_p = torch.distributions.Normal(encoder_mean, encoder_std)
         prior_p = torch.distributions.Normal(prior_mean, prior_std)
@@ -372,10 +361,7 @@ class LMP(nn.Module):
             latent = torch.tanh(latent)
 
         for t in range(seq_len):
-            if self.spirl:
-                nll_loss -= self.decoder.calc_log_prob(latent=latent, state=None, action=action_traj[:, t])
-            else:
-                nll_loss -= self.decoder.calc_log_prob(latent=latent, state=state_traj[:, t], action=action_traj[:, t])
+            nll_loss -= self.decoder.calc_log_prob(latent=latent, state=state_traj[:, t], action=action_traj[:, t])
 
         nll_loss = nll_loss / seq_len
         nll_loss = torch.clamp(nll_loss, -100, 100)
@@ -388,7 +374,7 @@ class LMP(nn.Module):
 
 class CnnLMP(nn.Module):
     def __init__(self, latent_dim, state_dim, action_dim, hidden_dims, flat_state_dim=256, tanh=False, latent_reg=0.0,
-                 ar=False, rnn_layers=4, act_fn=nn.ReLU(), spirl=False):
+                 ar=False, rnn_layers=4, act_fn=nn.ReLU()):
         super(CnnLMP, self).__init__()
         self.latent_dim = latent_dim
         self.action_dim = action_dim
@@ -400,13 +386,8 @@ class CnnLMP(nn.Module):
         self.latent_reg = latent_reg
         self.act_fn = act_fn
         self.ar = ar
-        self.spirl = spirl
         self.create_encoder()
-        if self.spirl:
-            self.decoder = CnnPolicyNetwork(latent_dim=latent_dim, state_dim=0, hidden_dims=hidden_dims,
-                                            act_dim=action_dim, act_fn=act_fn)
-        else:
-            self.decoder = CnnPolicyNetwork(latent_dim=latent_dim, state_dim=self.state_dim, hidden_dims=hidden_dims,
+        self.decoder = CnnPolicyNetwork(latent_dim=latent_dim, state_dim=self.state_dim, hidden_dims=hidden_dims,
                                             act_dim=action_dim, act_fn=act_fn)
         self.prior = CnnPolicyNetwork(latent_dim=0, state_dim=self.state_dim, hidden_dims=hidden_dims,
                                       act_dim=latent_dim, act_fn=act_fn)
@@ -414,10 +395,7 @@ class CnnLMP(nn.Module):
     def create_encoder(self):
         self.state_encoder = ConvEncoder(inp_dim=self.state_dim, out_dim=self.flat_state_dim)
 
-        if self.spirl:
-            input_dim = self.action_dim
-        else:
-            input_dim = self.flat_state_dim + 1  # self.action_dim
+        input_dim = self.flat_state_dim + 1  # self.action_dim
         self.birnn_encoder = nn.GRU(input_dim, self.hidden_dims[-1], self.rnn_layers, batch_first=True,
                                     bidirectional=True)
 
@@ -447,10 +425,7 @@ class CnnLMP(nn.Module):
         # Assumes all traj is of equal length
         batch_size, seq_len = action_traj.size(0), action_traj.size(1)
         nll_loss, kl_loss = 0., 0.
-        if self.spirl:
-            encoder_mean, encoder_std = self.forward_encoder(action_traj=action_traj, state_traj=None)
-        else:
-            encoder_mean, encoder_std = self.forward_encoder(action_traj=action_traj, state_traj=state_traj)
+        encoder_mean, encoder_std = self.forward_encoder(action_traj=action_traj, state_traj=state_traj)
         prior_mean, prior_std = self.prior(latent=None, state=state_traj[:, 0, :], encode_state=True)
         encoder_p = torch.distributions.Normal(encoder_mean, encoder_std)
         prior_p = torch.distributions.Normal(prior_mean, prior_std)
@@ -470,11 +445,7 @@ class CnnLMP(nn.Module):
             latent = torch.tanh(latent)
 
         for t in range(seq_len):
-            if self.spirl:
-                nll_loss -= self.decoder.calc_log_prob(latent=latent, state=None, action=action_traj[:, t],
-                                                       encode_state=True)
-            else:
-                nll_loss -= self.decoder.calc_log_prob(latent=latent, state=state_traj[:, t], action=action_traj[:, t],
+            nll_loss -= self.decoder.calc_log_prob(latent=latent, state=state_traj[:, t], action=action_traj[:, t],
                                                        encode_state=True)
 
         nll_loss = nll_loss / seq_len

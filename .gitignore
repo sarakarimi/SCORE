@@ -7,10 +7,12 @@ models/AE_models/logs/
 /models
 /RL/runs/
 /RL/wandb/
-/RL_opal/runs/
-/RL_opal/wandb/
+/RL_opal
 /RL_state_encoder/runs/
 /RL_state_encoder/wandb/
 __pycache__/
 .idea
 data
+util/wandb_modify.py
+util/visualization.py
+RL_state_encoder/self_contained_skill_sac.py

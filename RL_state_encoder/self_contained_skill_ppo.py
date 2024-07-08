@@ -85,7 +85,9 @@ def parse_args():
                         help="Use KL regularization using AE")
     parser.add_argument("--evaluate", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
                         help="Set to evaluation mode")
-    parser.add_argument("--model-path", type=str, default="../models/self_contained_skill_ppo_models/antmaze-xl-diverse-v0/antmaze-xl-diverse-v0_seed_5_kl_True_initialized_TrueadaptiveTrue_weights.pth", help="path to the saved model")
+    parser.add_argument("--model-path", type=str,
+                        default="../models/self_contained_skill_ppo_models/antmaze-xl-diverse-v0/antmaze-xl-diverse-v0_seed_5_kl_True_initialized_TrueadaptiveTrue_weights.pth",
+                        help="path to the saved model")
     # "models/self_contained_skill_ppo_models/antmaze-large-diverse-v0/antmaze-large-diverse-v0_seed_5_kl_True_initialized_TrueadaptiveTrue_weights.pth"
     # "models/self_contained_skill_ppo_models/antmaze-medium-diverse-v0/antmaze-medium-diverse-v0_seed_2_kl_True_initialized_TrueadaptiveTrue_weights.pth"
     args = parser.parse_args()
@@ -95,13 +97,39 @@ def parse_args():
     return args
 
 
+def make_env(gym_id, seed, idx, capture_video, run_name):
+    def thunk():
+        # env = gym.make(gym_id, reward_type='dense')  # , unwrap_time=True)  # gym.make(gym_id)
+        env = antmaze_costume_env()
+        env = gym.wrappers.RecordEpisodeStatistics(env)
+        if capture_video:
+            if idx == 0:
+                env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
+        env = gym.wrappers.ClipAction(env)
+        env = SkillConcatenated(env)
+        env = gym.wrappers.NormalizeObservation(env)
+        env = gym.wrappers.TransformObservation(env, lambda obs: np.clip(obs, -10, 10))
+        env = gym.wrappers.NormalizeReward(env)
+        env = gym.wrappers.TransformReward(env, lambda reward: np.clip(reward, -10, 10))
+        env.seed(seed)
+        env.action_space.seed(seed)
+        env.observation_space.seed(seed)
+        return env
+
+    return thunk
+
+
+def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
+    torch.nn.init.orthogonal_(layer.weight, std)
+    torch.nn.init.constant_(layer.bias, bias_const)
+    return layer
+
+
 class SkillConcatenated(ObservationWrapper):
     def __init__(self, env):
         super().__init__(env)
         state_dim = env.observation_space.shape[0] + 8
         self.observation_space = Box(shape=(state_dim,), low=-np.inf, high=np.inf)
-        # print(env.spec.name + "-v" + str(env.spec.version))
-        # path to the save skill VAE model
         path = "../models/AE_models/" + env.spec.name + "-v" + str(env.spec.version) + "-opal/600.pt"
         AE_model = load_ae_model(env, path).to('cuda')
         self.state_encoder = AE_model.prior
@@ -224,33 +252,6 @@ class Play:
         print("Avg episodic return:", np.asarray(eps_return).mean(), np.asarray(success_rate).mean())
         return np.asarray(eps_return).mean()
 
-def make_env(gym_id, seed, idx, capture_video, run_name):
-    def thunk():
-        # env = gym.make(gym_id, reward_type='dense')  # , unwrap_time=True)  # gym.make(gym_id)
-        env = antmaze_costume_env()
-        env = gym.wrappers.RecordEpisodeStatistics(env)
-        if capture_video:
-            if idx == 0:
-                env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
-        env = gym.wrappers.ClipAction(env)
-        env = SkillConcatenated(env)
-        env = gym.wrappers.NormalizeObservation(env)
-        env = gym.wrappers.TransformObservation(env, lambda obs: np.clip(obs, -10, 10))
-        env = gym.wrappers.NormalizeReward(env)
-        env = gym.wrappers.TransformReward(env, lambda reward: np.clip(reward, -10, 10))
-        env.seed(seed)
-        env.action_space.seed(seed)
-        env.observation_space.seed(seed)
-        return env
-
-    return thunk
-
-
-def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
-    torch.nn.init.orthogonal_(layer.weight, std)
-    torch.nn.init.constant_(layer.bias, bias_const)
-    return layer
-
 
 def main(seed):
     args = parse_args()
@@ -305,7 +306,7 @@ def main(seed):
         return return_avg
 
     else:  # training code
-        # Path to the trained skill VAW model to copy weights from the decoder to PPO policy net
+        # Path to the trained skill embedding model
         path = "../models/AE_models/" + args.gym_id + "-opal/600_old.pt"
         AE_model = get_trained_ae_model(state_dim=envs.single_observation_space.shape[0] - 8,
                                         action_dim=envs.single_action_space.shape[0], path=path).to('cuda')
@@ -447,7 +448,7 @@ def main(seed):
                     else:
                         v_loss = 0.5 * ((newvalue - b_returns[mb_inds]) ** 2).mean()
 
-                    # regularize with decoder
+                    # regularize with decoder and adaptive weighting of the kl term
                     if args.decoder_kl:
                         mean, std = AE_model.decoder(latent=b_obs[mb_inds], state=None)
                         decoder_dist = Normal(mean, std)
@@ -508,6 +509,3 @@ if __name__ == "__main__":
     avg_returns = []
     for seed in [1, 2, 3, 4, 5]:
         avg_return = main(seed)
-        avg_returns.append(avg_return)
-    print(avg_returns)
-    print(np.mean(np.asarray(avg_returns)), np.std(np.asarray(avg_returns)))

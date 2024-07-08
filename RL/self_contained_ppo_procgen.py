@@ -81,7 +81,6 @@ def parse_args():
     parser.add_argument("--evaluate", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
                         help="Set to evaluation mode")
     parser.add_argument("--model-path", type=str,
-                        default="../models/self_contained_ppo_procgen_models/coinrun/coinrun_easy_seed_1_weights.pth",
                         help="path to the saved model")
     args = parser.parse_args()
     args.batch_size = int(args.num_envs * args.num_steps)
@@ -190,7 +189,7 @@ class Agent(nn.Module):
     def load_weights(self, path):
         checkpoint = torch.load(path, map_location=torch.device('cuda'))
         self.actor.load_state_dict(checkpoint["actor_state_dict"])
-        self.network = checkpoint["network_state_dict"]
+        self.network.load_state_dict(checkpoint["network_state_dict"])
         self.critic.load_state_dict(checkpoint["critic_state_dict"])
         # optim.load_state_dict(checkpoint["optimizer_state_dict"])
 
@@ -213,18 +212,19 @@ class Play:
             done = False
             while not done:
                 i += 1
-                action, _, _, _ = self.agent.get_action_and_value(torch.FloatTensor(s).unsqueeze(0).to(self.device))
+                s = torch.FloatTensor(s).to(self.device)
+                action, _, _, _ = self.agent.get_action_and_value(s)
                 action = action.cpu().numpy()
                 if epsilon:
                     action = [random.randint(0, 14)] if random.random() < epsilon else action
-                data['observations'].append(s)
-                data['actions'].append(action[0])
-                s_, r, done, info = self.env.step(action[0])
+                # data['observations'].append(s[0])
+                # data['actions'].append(action[0])
+                s_, r, done, info = self.env.step(action)
                 episode_reward += r
                 s = s_
-                if "episode" in info.keys():
-                    eps_return.append(info['episode']['r'])
-                    print(i, info['episode']['r'])
+                if "episode" in info[0].keys():
+                    eps_return.append(info[0]['episode']['r'])
+                    print(i, info[0]['episode']['r'])
         print("Avg episodic return:", np.asarray(eps_return).mean(), i)
         return eps_return, data
 
@@ -282,10 +282,10 @@ def main(seed):
     agent = Agent(envs).to(device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
     if args.evaluate:  # evaluation loop
-        envs = gym.make("procgen-coinrun-v0", distribution_mode="easy", num_levels=args.num_levels, start_level=args.start_level)#, render_mode="human")
+        # envs = gym.make("procgen-coinrun-v0", distribution_mode="easy", num_levels=args.num_levels, start_level=args.start_level)#, render_mode="human")
         player = Play(envs, args.model_path, agent)
-        # player.evaluate()
-        player.build_trajectory_dataset(epsilon=0.2)
+        player.evaluate()
+        # player.build_trajectory_dataset(epsilon=0.2)
         envs.close()
         writer.close()
     else:
@@ -452,5 +452,5 @@ def main(seed):
 
 
 if __name__ == "__main__":
-    for seed in [2, 3, 4, 5]:
+    for seed in [1, 2, 3, 4, 5]:
         main(seed)

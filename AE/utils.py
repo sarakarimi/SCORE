@@ -16,12 +16,12 @@ def get_model(env: object, env_name: str) -> object:
         print(env.observation_space)
         model = CnnLMP(latent_dim=config['latent_dim'], state_dim=env.observation_space.shape,
                        action_dim=15, hidden_dims=config['hidden_dims'],
-                       tanh=config['tanh'], latent_reg=config['latent_reg'], ar=False, spirl=config['spirl'])
+                       tanh=config['tanh'], latent_reg=config['latent_reg'], ar=False)
     else:
         model = LMP(latent_dim=config['latent_dim'], state_dim=env.observation_space.shape[0],
                     action_dim=env.action_space.shape[0], hidden_dims=config['hidden_dims'],
                     goal_idxs=config['goal_idxs'], tanh=config['tanh'],
-                    latent_reg=config['latent_reg'], ar=False, spirl=config['spirl'])
+                    latent_reg=config['latent_reg'], ar=False)
     return model
 
 
@@ -36,11 +36,11 @@ def get_trained_ae_model(action_dim, state_dim, path, env_name=None):
     if env_name is 'procgen':
         ae_model = CnnLMP(latent_dim=config['latent_dim'], state_dim=state_dim, action_dim=15,
                           hidden_dims=config['hidden_dims'], tanh=config['tanh'], latent_reg=config['latent_reg'],
-                          ar=False, spirl=config['spirl'])
+                          ar=False)
     else:
         ae_model = LMP(latent_dim=config['latent_dim'], state_dim=state_dim, action_dim=action_dim,
                        hidden_dims=config['hidden_dims'], goal_idxs=config['goal_idxs'], tanh=config['tanh'],
-                       latent_reg=config['latent_reg'], ar=False, spirl=config['spirl'])
+                       latent_reg=config['latent_reg'], ar=False)
     checkpoint = torch.load(path, map_location=torch.device('cuda'))
     ae_model.load_state_dict(checkpoint['gp_aa_model'])
     return ae_model
@@ -48,7 +48,7 @@ def get_trained_ae_model(action_dim, state_dim, path, env_name=None):
 
 def make_env(costume_map=False):
     if config['env_name'] is 'procgen':
-        env = ProcgenEnv(num_envs=1, env_name='coinrun', num_levels=1, start_level=65, distribution_mode="easy")
+        env = ProcgenEnv(num_envs=1, env_name='coinrun', num_levels=64, start_level=0, distribution_mode="easy")
         return env
     if costume_map:
         R = 'r'
@@ -115,9 +115,5 @@ def evaluate(env, model):
     plt.xlabel("Steps")
     plt.ylabel("reward")
     plt.legend(loc='lower right', frameon=True)
-    if config['spirl']:
-        input_format = "spirl"
-    else:
-        input_format = 'opal'
-    plt.title(config['env_name'] + " in format of " + input_format)
+    plt.title(config['env_name'])
     plt.show()

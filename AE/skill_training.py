@@ -95,10 +95,7 @@ def train():
         #     # render_env = gym.wrappers.Monitor(env, os.path.join("no_train", f'epoch_num_{epoch_num}'),
         #     #                                   video_callable=lambda episode_id: is_render)
         #     play_policy(env, gp_aa_model, config['num_eval'], config['traj_length'], config['tanh'], is_cuda)
-        if config['spirl']:
-            path = os.path.join("../models/AE_models", config["env_name"] + "-spirl", f'{epoch_num}.pt')
-        else:
-            path = os.path.join("../models/AE_models", config["env_name"] + "-opal", f'{epoch_num}.pt')
+        path = os.path.join("../models/AE_models", config["env_name"] + "-opal", f'{epoch_num}.pt')
         if epoch_num % 10 == 0:
             save_dict = {'gp_aa_model': gp_aa_model.state_dict(), 'opt': optimizer.state_dict()}
             torch.save(save_dict, path)

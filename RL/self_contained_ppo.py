@@ -20,67 +20,95 @@ def parse_args():
     # fmt: off
     parser = argparse.ArgumentParser()
     parser.add_argument("--exp-name", type=str, default=os.path.basename(__file__).rstrip(".py"),
-        help="the name of this experiment")
+                        help="the name of this experiment")
     parser.add_argument("--gym-id", type=str, default="antmaze-large-diverse-v0",
-        help="the id of the gym environment")
+                        help="the id of the gym environment")
     parser.add_argument("--learning-rate", type=float, default=3e-4,
-        help="the learning rate of the optimizer")
+                        help="the learning rate of the optimizer")
     parser.add_argument("--seed", type=int, default=1,
-        help="seed of the experiment")
+                        help="seed of the experiment")
     parser.add_argument("--total-timesteps", type=int, default=3500000,
-        help="total timesteps of the experiments")
+                        help="total timesteps of the experiments")
     parser.add_argument("--torch-deterministic", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-        help="if toggled, `torch.backends.cudnn.deterministic=False`")
+                        help="if toggled, `torch.backends.cudnn.deterministic=False`")
     parser.add_argument("--cuda", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-        help="if toggled, cuda will be enabled by default")
-    parser.add_argument("--track", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
-        help="if toggled, this experiment will be tracked with Weights and Biases")
+                        help="if toggled, cuda will be enabled by default")
+    parser.add_argument("--track", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
+                        help="if toggled, this experiment will be tracked with Weights and Biases")
     parser.add_argument("--wandb-project-name", type=str, default="ppo-skill-learning",
-        help="the wandb's project name")
+                        help="the wandb's project name")
     parser.add_argument("--wandb-entity", type=str, default=None,
-        help="the entity (team) of wandb's project")
+                        help="the entity (team) of wandb's project")
     parser.add_argument("--capture-video", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
-        help="weather to capture videos of the agent performances (check out `videos` folder)")
+                        help="weather to capture videos of the agent performances (check out `videos` folder)")
 
     # Algorithm specific arguments
     parser.add_argument("--num-envs", type=int, default=1,
-        help="the number of parallel game environments")
+                        help="the number of parallel game environments")
     parser.add_argument("--num-steps", type=int, default=2048,
-        help="the number of steps to run in each environment per policy rollout")
+                        help="the number of steps to run in each environment per policy rollout")
     parser.add_argument("--anneal-lr", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-        help="Toggle learning rate annealing for policy and value networks")
+                        help="Toggle learning rate annealing for policy and value networks")
     parser.add_argument("--gae", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-        help="Use GAE for advantage computation")
+                        help="Use GAE for advantage computation")
     parser.add_argument("--gamma", type=float, default=0.99,
-        help="the discount factor gamma")
+                        help="the discount factor gamma")
     parser.add_argument("--gae-lambda", type=float, default=0.95,
-        help="the lambda for the general advantage estimation")
+                        help="the lambda for the general advantage estimation")
     parser.add_argument("--num-minibatches", type=int, default=32,
-        help="the number of mini-batches")
+                        help="the number of mini-batches")
     parser.add_argument("--update-epochs", type=int, default=10,
-        help="the K epochs to update the policy")
+                        help="the K epochs to update the policy")
     parser.add_argument("--norm-adv", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-        help="Toggles advantages normalization")
+                        help="Toggles advantages normalization")
     parser.add_argument("--clip-coef", type=float, default=0.2,
-        help="the surrogate clipping coefficient")
+                        help="the surrogate clipping coefficient")
     parser.add_argument("--clip-vloss", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-        help="Toggles whether or not to use a clipped loss for the value function, as per the paper.")
+                        help="Toggles whether or not to use a clipped loss for the value function, as per the paper.")
     parser.add_argument("--ent-coef", type=float, default=0.0,
-        help="coefficient of the entropy")
+                        help="coefficient of the entropy")
     parser.add_argument("--vf-coef", type=float, default=0.5,
-        help="coefficient of the value function")
+                        help="coefficient of the value function")
     parser.add_argument("--max-grad-norm", type=float, default=0.5,
-        help="the maximum norm for the gradient clipping")
+                        help="the maximum norm for the gradient clipping")
     parser.add_argument("--target-kl", type=float, default=None,
-        help="the target KL divergence threshold")
-    parser.add_argument("--evaluate", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
+                        help="the target KL divergence threshold")
+    parser.add_argument("--evaluate", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
                         help="Set to evaluation mode")
-    parser.add_argument("--model-path", type=str, default="../models/self_contained_ppo_models/antmaze-large-diverse-v0/antmaze-large-diverse-v0_seed_4_weights.pth", help="path to the saved model")
+    parser.add_argument("--model-path", type=str, help="path to the saved model")
 
     args = parser.parse_args()
     args.batch_size = int(args.num_envs * args.num_steps)
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
     return args
+
+
+def make_env(gym_id, seed, idx, capture_video, run_name):
+    def thunk():
+        env = gym.make(gym_id, reward_type='dense')  # , unwrap_time=True)
+        # env = antmaze_costume_env()
+        env = gym.wrappers.RecordEpisodeStatistics(env)
+        if capture_video:
+            if idx == 0:
+                env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
+        env = gym.wrappers.ClipAction(env)
+        env = gym.wrappers.NormalizeObservation(env)
+        env = gym.wrappers.TransformObservation(env, lambda obs: np.clip(obs, -10, 10))
+        env = gym.wrappers.NormalizeReward(env)
+        env = gym.wrappers.TransformReward(env, lambda reward: np.clip(reward, -10, 10))
+        env.seed(seed)
+        env.action_space.seed(seed)
+        env.observation_space.seed(seed)
+        print((env.spec))
+        return env
+
+    return thunk
+
+
+def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
+    torch.nn.init.orthogonal_(layer.weight, std)
+    torch.nn.init.constant_(layer.bias, bias_const)
+    return layer
 
 
 class Agent(nn.Module):
@@ -115,7 +143,8 @@ class Agent(nn.Module):
         return action, probs.log_prob(action).sum(1), probs.entropy().sum(1), self.critic(x)
 
     def save_weights(self, env_name, env, optim, seed):
-        path = "../models/self_contained_ppo_models/" + env_name + "/" + env_name + "_seed_" + str(seed) + "_weights.pth"
+        path = "../models/self_contained_ppo_models/" + env_name + "/" + env_name + "_seed_" + str(
+            seed) + "_weights.pth"
         torch.save({"policy_mean_state_dict": self.actor_mean.state_dict(),
                     "policy_std_state_dict": self.actor_logstd,
                     "critic_state_dict": self.critic.state_dict(),
@@ -144,7 +173,6 @@ class Play:
         self.env.envs[0].obs_rms.var = state_rms_var
         self.device = "cuda"
 
-
     def evaluate(self):
         eps_return = []
         success_rate = []
@@ -157,7 +185,7 @@ class Play:
                 i += 1
                 s = torch.FloatTensor(s).to(self.device)
 
-                action, _, _, _= self.agent.get_action_and_value(s)
+                action, _, _, _ = self.agent.get_action_and_value(s)
                 action = action.cpu().numpy()
                 s_, r, done, info = self.env.step(action)
                 episode_reward += r
@@ -172,34 +200,6 @@ class Play:
                     #     print(i, info[0]['episode']['r'])
         print("Avg episodic return:", np.asarray(eps_return).mean(), np.asarray(success_rate).mean())
         return np.asarray(eps_return).mean()
-
-
-def make_env(gym_id, seed, idx, capture_video, run_name):
-    def thunk():
-        env = gym.make(gym_id, reward_type='dense') #, unwrap_time=True)
-        # env = antmaze_costume_env()
-        env = gym.wrappers.RecordEpisodeStatistics(env)
-        if capture_video:
-            if idx == 0:
-                env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
-        env = gym.wrappers.ClipAction(env)
-        env = gym.wrappers.NormalizeObservation(env)
-        env = gym.wrappers.TransformObservation(env, lambda obs: np.clip(obs, -10, 10))
-        env = gym.wrappers.NormalizeReward(env)
-        env = gym.wrappers.TransformReward(env, lambda reward: np.clip(reward, -10, 10))
-        env.seed(seed)
-        env.action_space.seed(seed)
-        env.observation_space.seed(seed)
-        print((env.spec))
-        return env
-
-    return thunk
-
-
-def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
-    torch.nn.init.orthogonal_(layer.weight, std)
-    torch.nn.init.constant_(layer.bias, bias_const)
-    return layer
 
 
 def main(seed):
@@ -422,6 +422,3 @@ if __name__ == "__main__":
     avg_returns = []
     for seed in [1, 2, 3, 4, 5]:
         avg_return = main(seed)
-        avg_returns.append(avg_return)
-    print(avg_returns)
-    print(np.mean(np.asarray(avg_returns)), np.std(np.asarray(avg_returns)))

@@ -18,7 +18,7 @@ class SkillConcatenated(ObservationWrapper):
         self.observation_space = Box(shape=(state_dim,), low=-np.inf, high=np.inf)
         print(env.spec.name + "-v" + str(env.spec.version))
         # replace with path to trained VAE
-        path = "/models/AE_models/" + env.spec.name + "-v" + str(env.spec.version) + "-opal/long-with-clamp-1000.pt"
+        path = "../models/AE_models/" + env.spec.name + "-v" + str(env.spec.version) + "-opal/long-with-clamp-1000.pt"
         AE_model = load_ae_model(env, path).to('cuda')
         self.state_encoder = AE_model.prior
 
@@ -62,9 +62,9 @@ class Agent(nn.Module):
 
     def load_weights(self, env_name, checkpoint_name=None):
         if checkpoint_name is None:
-            path = "/models/self_contained_skill_ppo_models/antmaze-medium-diverse-v0/antmaze-medium-diverse-v0_seed_2_weights.pth"
+            path = "../models/self_contained_skill_ppo_models/antmaze-medium-diverse-v0/antmaze-medium-diverse-v0_seed_2_weights.pth"
         else:
-            path = "/models/self_contained_skill_ppo_models/" + env_name + "/" + checkpoint_name
+            path = "../models/self_contained_skill_ppo_models/" + env_name + "/" + checkpoint_name
         checkpoint = torch.load(path, map_location=torch.device('cuda'))
         self.actor_mean.load_state_dict(checkpoint["policy_mean_state_dict"])
         self.actor_logstd = checkpoint["policy_std_state_dict"]

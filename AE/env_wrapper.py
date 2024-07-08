@@ -1,8 +1,5 @@
-import cv2
 import gym
 import d4rl
-import mujoco_py
-import numpy
 import numpy as np
 import h5py
 from tqdm import tqdm
@@ -31,6 +28,7 @@ def antmaze_costume_env():
 
     env = gym.make('antmaze-large-diverse-v0', maze_map=example_map, reward_type='dense', render_mode='human')
     return env
+
 
 def get_keys(h5file):
     keys = []
@@ -72,6 +70,3 @@ def get_trajectory(env_name, traj_len, dataset=None, random_start=False):
         list_of_states = [dataset['observations'][i:i + traj_len] for i in start_indexes]
         list_of_actions = [dataset['actions'][i:i + traj_len] for i in start_indexes]
     return list_of_states, list_of_actions
-
-
-
