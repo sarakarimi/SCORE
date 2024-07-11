@@ -78,6 +78,8 @@ def parse_args():
                         help="coefficient of the entropy")
     parser.add_argument("--vf-coef", type=float, default=0.5,
                         help="coefficient of the value function")
+    parser.add_argument("--kl-coef", type=float, default=1e-8,
+                        help="coefficient of the kl regularization term")
     parser.add_argument("--max-grad-norm", type=float, default=0.5,
                         help="the maximum norm for the gradient clipping")
     parser.add_argument("--target-kl", type=float, default=None,
@@ -469,7 +471,7 @@ def main(seed):
                         kl_divergence = torch.clamp(kl_divergence, -100, 100)
                         kl_loss = kl_divergence * uncertainty_weight
 
-                        p_loss = pg_loss - 0.00001 * kl_loss.sum()
+                        p_loss = pg_loss + args.kl_coef * kl_loss.sum()
                     else:
                         p_loss = pg_loss
 
@@ -494,7 +496,7 @@ def main(seed):
             writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
             writer.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
             writer.add_scalar("losses/p_loss", p_loss.item(), global_step)
-            writer.add_scalar("losses/kl_loss", kl_divergence.sum().item(), global_step)
+            writer.add_scalar("losses/kl_loss", kl_loss.sum().item(), global_step)
             writer.add_scalar("losses/uncertainty_weights", uncertainty_weight.sum().item(), global_step)
 
             writer.add_scalar("losses/entropy", entropy_loss.item(), global_step)
@@ -520,5 +522,5 @@ def main(seed):
 
 
 if __name__ == "__main__":
-    for seed in [1, 2, 3, 4, 5]:
+    for seed in [1]:
         main(seed)
